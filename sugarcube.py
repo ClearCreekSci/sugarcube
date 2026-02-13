@@ -2,9 +2,7 @@
     sugarcube.py
     Simple API to access the PiSugar2 power platform for Raspbery Pi
     (https://docs.pisugar.com/docs/product-wiki/battery/pisugar2/pisugar-2)
-    (
-
-
+    (https://github.com/PiSugar/PiSugar/wiki/PiSugar-Power-Manager-(Software))
 
 
     Copyright (C) 2026 Clear Creek Scientific
@@ -44,36 +42,70 @@ class Connection(object):
         sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.connection = socket.create_connection(addr)
 
-
-    def read(self,s): -> str
+    def read(self,s) -> str:
         if None is not self.connection:
             self.connection.send(str.encode(s))
             b = self.connection.recv(512)
-            rv = b.decode("utf-8").strip()
+            rv = b.decode('utf-8').strip()
             if 'I2C not connected' in rv:
                 raise SugarDisconnected(rv)
             return rv
+
+    def is_connected(self) -> bool:
+        return self.connection is not None
+
+    def is_battery_charging(self) -> bool:
+        s = self.read('get battery_charging')
+        parts = s.split(' ')
+        rv = parts[-1]
+        return bool(rv)
+
+    def is_battery_output_enabled(self) -> bool:
+        s = self.read('get battery_output_enabled')
+        parts = s.split(' ')
+        rv = parts[-1]
+        return bool(rv)
+
+    def get_model(self) -> str:
+        s = self.read('get model')
+        parts = s.split(':')
+        rv = parts[1][1:]
+        return rv 
+
+    def get_battery_percentage(self) -> float:
+        s = self.read('get battery')
+        parts = s.split(' ')
+        rv = parts[-1]
+        return float(rv)
+
+    def get_battery_voltage(self) -> float:
+        s = self.read('get battery_v')
+        parts = s.split(' ')
+        rv = parts[-1]
+        return float(rv)
+
+    def get_battery_current(self) -> float:
+        s = self.read('get battery_i')
+        parts = s.split(' ')
+        rv = parts[-1]
+        return float(rv)
 
 if "__main__" == __name__:
 
     try:
         conn = Connection()
-        model = conn.read('get model')
+        model = conn.get_model()
         print(model)
-        level = conn.read('get battery')
-        print(level + '%')
-        volts = conn.read('get battery_v')
-        print(volts + ' volts')
-        current = conn.read('get battery_i')
-        print(current + ' amps')
-        temp = conn.read('get temperature')
-        print(temp)
+        level = conn.get_battery_percentage()
+        print(str(level) + '%')
+        volts = conn.get_battery_voltage()
+        print(str(volts) + ' volts')
+        current = conn.get_battery_current()
+        print(str(current) + ' amps')
 
-        enabled = conn.read('get battery_output_enabled')
+        enabled = conn.is_battery_output_enabled()
         print('battery output enabled: ' + str(enabled))
 
-        version = conn.read('get firmware_version')
-        print(version)
     except ConnectionRefusedError as ex:
         print('PiSugar server not found')
     except SugarDisconnected as ex:
