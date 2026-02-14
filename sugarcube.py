@@ -27,19 +27,12 @@ import datetime
 import subprocess
 import time
 
-DEFAULT_PORT = 8423
-
+DEFAULT_PORT    = 8423
+NAME            = 'sugarcube'
 RTC_TIME_PREFIX = 'rtc_time: '
 
 class SugarDisconnected(Exception):
     pass
-
-# FIXME: Remove this for release
-def logmsg(msg):
-    with open('/opt/ccs/DataLogger/sugarcube.log','a') as fd:
-            ts = datetime.datetime.now(datetime.UTC)
-            s = ts.strftime('%Y-%m-%d %I:%M:%S ') + msg + '\n'
-            fd.write(s)
 
 class Connection(object):
 
@@ -47,6 +40,7 @@ class Connection(object):
         self.port = port
         self.connection = None
         self.connect()
+        self.log_callback = None
 
     def connect(self):
         addr = ('127.0.0.1',self.port)
@@ -112,18 +106,25 @@ class Connection(object):
             else:
                 return rv 
             now = datetime.datetime.fromisoformat(chk)
-            logmsg('now: ' + now.isoformat(timespec='seconds'))
+            self.logmsg('now: ' + now.isoformat(timespec='seconds'))
             wake = now + datetime.timedelta(minutes=v)
-            logmsg('wake: ' + wake.isoformat(timespec='seconds'))
+            self.logmsg('wake: ' + wake.isoformat(timespec='seconds'))
             s = wake.isoformat(timespec='seconds')
             s = 'rtc_alarm_set ' + s + ' 7' 
             # Include the the repeat value to '7' so that it happens every day?
-            logmsg('sending: ' + s)
+            self.logmsg('sending: ' + s)
             chk = self.send(s)
-            logmsg('rtc_alarm_set returned: ' + chk)
+            self.logmsg('rtc_alarm_set returned: ' + chk)
             subprocess.run(['pisugar-poweroff','-m','PiSugar 2 (2-LEDs)'])
         else:
-            logmsg('rtc_rtc2pi returned: ' + chk)
+            self.logmsg('rtc_rtc2pi returned: ' + chk)
+
+    def set_log_callback(self,callback):
+        self.log_callback = callback
+
+    def logmsg(self,msg,level=0):
+        if None is not self.log_callback:
+            self.log_callback(NAME,msg,level)
 
 if "__main__" == __name__:
 
