@@ -23,12 +23,23 @@
 """
 import argparse
 import socket
-
+import datetime
+import subprocess
+import time
 
 DEFAULT_PORT = 8423
 
+RTC_TIME_PREFIX = 'rtc_time: '
+
 class SugarDisconnected(Exception):
     pass
+
+# FIXME: Remove this for release
+def logmsg(msg):
+    with open('/opt/ccs/DataLogger/sugarcube.log','a') as fd:
+            ts = datetime.datetime.now(datetime.UTC)
+            s = ts.strftime('%Y-%m-%d %I:%M:%S ') + msg + '\n'
+            fd.write(s)
 
 class Connection(object):
 
@@ -39,10 +50,9 @@ class Connection(object):
 
     def connect(self):
         addr = ('127.0.0.1',self.port)
-        sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.connection = socket.create_connection(addr)
 
-    def read(self,s) -> str:
+    def send(self,s) -> str:
         if None is not self.connection:
             self.connection.send(str.encode(s))
             b = self.connection.recv(512)
@@ -55,40 +65,65 @@ class Connection(object):
         return self.connection is not None
 
     def is_battery_charging(self) -> bool:
-        s = self.read('get battery_charging')
+        s = self.send('get battery_charging')
         parts = s.split(' ')
         rv = parts[-1]
         return bool(rv)
 
     def is_battery_output_enabled(self) -> bool:
-        s = self.read('get battery_output_enabled')
+        s = self.send('get battery_output_enabled')
         parts = s.split(' ')
         rv = parts[-1]
         return bool(rv)
 
     def get_model(self) -> str:
-        s = self.read('get model')
+        s = self.send('get model')
         parts = s.split(':')
         rv = parts[1][1:]
         return rv 
 
     def get_battery_percentage(self) -> float:
-        s = self.read('get battery')
+        s = self.send('get battery')
         parts = s.split(' ')
         rv = parts[-1]
         return float(rv)
 
     def get_battery_voltage(self) -> float:
-        s = self.read('get battery_v')
+        s = self.send('get battery_v')
         parts = s.split(' ')
         rv = parts[-1]
         return float(rv)
 
     def get_battery_current(self) -> float:
-        s = self.read('get battery_i')
+        s = self.send('get battery_i')
         parts = s.split(' ')
         rv = parts[-1]
         return float(rv)
+
+    # sleep for "v" minutes and then wakeup
+    def sleep(self,v) -> bool:
+        rv = False
+        # Force the pi to use our clock
+        chk = self.send('rtc_rtc2pi')
+        if 'done' in chk:
+            chk = self.send('get rtc_time')
+            if chk.startswith(RTC_TIME_PREFIX):
+                chk = chk[len(RTC_TIME_PREFIX):]
+            else:
+                return rv 
+            now = datetime.datetime.fromisoformat(chk)
+            logmsg('now: ' + now.isoformat(timespec='seconds'))
+            wake = now + datetime.timedelta(minutes=v)
+            logmsg('wake: ' + wake.isoformat(timespec='seconds'))
+            s = wake.isoformat(timespec='seconds')
+            s = 'rtc_alarm_set ' + s + ' 7' 
+            # Include the the repeat value to '7' so that it happens every day?
+            logmsg('sending: ' + s)
+            chk = self.send(s)
+            logmsg('rtc_alarm_set returned: ' + chk)
+            subprocess.run(['pisugar-poweroff','-m','PiSugar 2 (2-LEDs)'])
+        else:
+            logmsg('rtc_rtc2pi returned: ' + chk)
 
 if "__main__" == __name__:
 
