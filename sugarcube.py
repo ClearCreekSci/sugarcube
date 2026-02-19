@@ -106,16 +106,14 @@ class Connection(object):
             else:
                 return rv 
             now = datetime.datetime.fromisoformat(chk)
-            self.logmsg('now: ' + now.isoformat(timespec='seconds'))
             wake = now + datetime.timedelta(minutes=v)
-            self.logmsg('wake: ' + wake.isoformat(timespec='seconds'))
             s = wake.isoformat(timespec='seconds')
-            s = 'rtc_alarm_set ' + s + ' 7' 
-            # Include the the repeat value to '7' so that it happens every day?
-            self.logmsg('sending: ' + s)
+            # 127 is a bit field indicating on which days the alarm shoud be repeated 
+            s = 'rtc_alarm_set ' + s + ' 127' 
             chk = self.send(s)
-            self.logmsg('rtc_alarm_set returned: ' + chk)
-            subprocess.run(['pisugar-poweroff','-m','PiSugar 2 (2-LEDs)'])
+            subprocess.run(['sync'])
+            time.sleep(3)
+            subprocess.run(['sudo','shutdown','-h','now'])
         else:
             self.logmsg('rtc_rtc2pi returned: ' + chk)
 
